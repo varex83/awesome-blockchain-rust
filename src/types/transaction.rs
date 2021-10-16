@@ -8,7 +8,7 @@ pub struct Transaction {
     nonce: u128,
     timestamp: Timestamp,
     from: Option<AccountId>,
-    data: TransactionData,
+    pub(crate) data: TransactionData,
     signature: Option<String>,
 }
 

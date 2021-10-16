@@ -7,7 +7,7 @@ use blake2::{Blake2s, Digest};
 pub struct Block {
     nonce: u128,
     pub(crate) hash: Option<Hash>,
-    prev_hash: Option<Hash>,
+    pub(crate) prev_hash: Option<Hash>,
     pub(crate) transactions: Vec<Transaction>,
 }
 
