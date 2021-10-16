@@ -8,7 +8,7 @@ pub struct Block {
     nonce: u128,
     pub(crate) hash: Option<Hash>,
     prev_hash: Option<Hash>,
-    transactions: Vec<Transaction>,
+    pub(crate) transactions: Vec<Transaction>,
 }
 
 impl Block {
@@ -61,7 +61,7 @@ mod tests {
     #[test]
     fn test_creation() {
         let mut block = Block::new(None);
-        let mut tx = Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
+        let tx = Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
         block.set_nonce(1);
         block.add_transaction(tx);
 
@@ -71,7 +71,7 @@ mod tests {
     #[test]
     fn test_hash() {
         let mut block = Block::new(None);
-        let mut tx = Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
+        let tx = Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
         block.set_nonce(1);
 
         let hash1 = block.hash();

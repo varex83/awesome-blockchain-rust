@@ -1,5 +1,5 @@
-use crate::traits::Hashable;
-use crate::types::{AccountId, Balance, Hash, Timestamp};
+use crate::traits::{Hashable, WorldState};
+use crate::types::{AccountId, AccountType, Balance, Error, Hash, Timestamp};
 use blake2::digest::FixedOutput;
 use blake2::{Blake2s, Digest};
 
@@ -27,6 +27,28 @@ impl Transaction {
             from,
             data,
             signature: None,
+        }
+    }
+
+    pub fn execute<T: WorldState>(&self, state: &mut T, is_genesis: bool) -> Result<(), Error> {
+        match &self.data {
+            TransactionData::CreateAccount(account_id) => {
+                state.create_account(account_id.clone(), AccountType::User)
+            }
+            TransactionData::MintInitialSupply { to, amount } => {
+                if !is_genesis {
+                    return Err("Initial supply can be minted only in genesis block.".to_string());
+                }
+                match state.get_account_by_id_mut(to.clone()) {
+                    Some(account) => {
+                        account.balance += amount;
+                        Ok(())
+                    }
+                    None => Err("Invalid account.".to_string()),
+                }
+            }
+
+            _ => Err("Unknown tx".to_string()),
         }
     }
 }

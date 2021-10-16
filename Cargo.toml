@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 blake2 = "*"
 hex="*"
+rand = "0.7.0"

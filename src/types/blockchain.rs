@@ -44,10 +44,23 @@ impl Blockchain {
     }
 
     pub fn append_block(&mut self, block: Block) -> Result<(), Error> {
-        //1. Verify block
-        //2. Verify Transactions
-        //3. Execute Transactions
-        //4. append_block
+        if !block.verify() {
+            return Err("Block has invalid hash".to_string());
+        }
+        let is_genesis = self.blocks.len() == 0;
+
+        if block.transactions.len() == 0 {
+            return Err("Block has 0 transactions.".to_string());
+        }
+
+        let account_backup = self.accounts.clone();
+        for tx in &block.transactions {
+            let res = tx.execute(self, is_genesis);
+            if let Err(error) = res {
+                self.accounts = account_backup;
+                return Err(format!("Error during tx execution: {}", error));
+            }
+        }
 
         self.blocks.append(block);
         Ok(())
@@ -61,6 +74,8 @@ impl Blockchain {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::TransactionData;
+    use crate::utils::{append_block, append_block_with_tx};
 
     #[test]
     fn test_new() {
@@ -70,17 +85,96 @@ mod tests {
 
     #[test]
     fn test_append() {
+        let bc = &mut Blockchain::new();
+
+        append_block(bc, 1);
+        let block = append_block(bc, 2);
+
+        assert_eq!(bc.get_last_block_hash(), block.hash);
+    }
+
+    #[test]
+    fn test_create_genesis_block() {
+        let bc = &mut Blockchain::new();
+
+        let tx_create_account =
+            Transaction::new(TransactionData::CreateAccount("satoshi".to_string()), None);
+        let tx_mint_initial_supply = Transaction::new(
+            TransactionData::MintInitialSupply {
+                to: "satoshi".to_string(),
+                amount: 100_000_000,
+            },
+            None,
+        );
+
+        assert!(
+            append_block_with_tx(bc, 1, vec![tx_create_account, tx_mint_initial_supply]).is_ok()
+        );
+
+        let satoshi = bc.get_account_by_id("satoshi".to_string());
+
+        assert!(satoshi.is_some());
+        assert_eq!(satoshi.unwrap().balance, 100_000_000);
+    }
+
+    #[test]
+    fn test_create_genesis_block_fails() {
         let mut bc = Blockchain::new();
+
+        let tx_create_account =
+            Transaction::new(TransactionData::CreateAccount("satoshi".to_string()), None);
+        let tx_mint_initial_supply = Transaction::new(
+            TransactionData::MintInitialSupply {
+                to: "satoshi".to_string(),
+                amount: 100_000_000,
+            },
+            None,
+        );
         let mut block = Block::new(None);
         block.set_nonce(1);
+        block.add_transaction(tx_mint_initial_supply);
+        block.add_transaction(tx_create_account);
 
-        bc.append_block(block.clone());
+        assert_eq!(
+            bc.append_block(block).err().unwrap(),
+            "Error during tx execution: Invalid account.".to_string()
+        );
+    }
 
+    #[test]
+    fn test_state_rollback_works() {
+        let mut bc = Blockchain::new();
+
+        let tx_create_account =
+            Transaction::new(TransactionData::CreateAccount("satoshi".to_string()), None);
+        let tx_mint_initial_supply = Transaction::new(
+            TransactionData::MintInitialSupply {
+                to: "satoshi".to_string(),
+                amount: 100_000_000,
+            },
+            None,
+        );
+        let mut block = Block::new(None);
+        block.set_nonce(1);
+        block.add_transaction(tx_create_account);
+        block.add_transaction(tx_mint_initial_supply);
+
+        assert!(bc.append_block(block).is_ok());
+
+        let mut block = Block::new(bc.get_last_block_hash());
+        let tx_create_alice =
+            Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
+        let tx_create_bob =
+            Transaction::new(TransactionData::CreateAccount("bob".to_string()), None);
         block.set_nonce(2);
-        bc.append_block(block.clone());
+        block.add_transaction(tx_create_alice);
+        block.add_transaction(tx_create_bob.clone());
+        block.add_transaction(tx_create_bob);
 
-        let hash = block.hash;
+        assert!(bc.append_block(block).is_err());
 
-        assert_eq!(bc.get_last_block_hash(), hash);
+        assert!(bc.get_account_by_id("satoshi".to_string()).is_some());
+        assert!(bc.get_account_by_id("alice".to_string()).is_none());
+        assert!(bc.get_account_by_id("bob".to_string()).is_none());
     }
 }
