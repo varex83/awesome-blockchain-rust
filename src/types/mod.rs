@@ -14,3 +14,4 @@ pub type Hash = String;
 pub type Timestamp = u128;
 pub type AccountId = String;
 pub type Balance = u128;
+pub type Error = String;

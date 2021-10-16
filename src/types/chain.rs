@@ -1,10 +1,10 @@
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Node<T> {
     data: T,
     prev: Option<Box<Node<T>>>,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Chain<T> {
     head: Option<Box<Node<T>>>,
     len: usize,
