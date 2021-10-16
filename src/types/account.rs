@@ -11,3 +11,12 @@ pub struct Account {
     account_type: AccountType,
     balance: Balance,
 }
+
+impl Account {
+    pub fn new(account_type: AccountType) -> Self {
+        Self {
+            account_type,
+            balance: 0,
+        }
+    }
+}

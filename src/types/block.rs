@@ -32,6 +32,10 @@ impl Block {
         self.update_hash();
     }
 
+    pub fn verify(&self) -> bool {
+        matches!(&self.hash, Some(hash) if hash == &self.hash())
+    }
+
     fn update_hash(&mut self) {
         self.hash = Some(self.hash());
     }
