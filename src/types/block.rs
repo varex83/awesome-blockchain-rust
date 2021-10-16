@@ -3,10 +3,10 @@ use crate::types::{Hash, Transaction};
 use blake2::digest::FixedOutput;
 use blake2::{Blake2s, Digest};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Block {
     nonce: u128,
-    hash: Option<Hash>,
+    pub(crate) hash: Option<Hash>,
     prev_hash: Option<Hash>,
     transactions: Vec<Transaction>,
 }

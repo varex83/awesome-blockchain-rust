@@ -27,3 +27,30 @@ impl Blockchain {
         self.blocks.head().map(|block| block.hash())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let bc = Blockchain::new();
+        assert_eq!(bc.get_last_block_hash(), None);
+    }
+
+    #[test]
+    fn test_append() {
+        let mut bc = Blockchain::new();
+        let mut block = Block::new(None);
+        block.set_nonce(1);
+
+        bc.append_block(block.clone());
+
+        block.set_nonce(2);
+        bc.append_block(block.clone());
+
+        let hash = block.hash;
+
+        assert_eq!(bc.get_last_block_hash(), hash);
+    }
+}
