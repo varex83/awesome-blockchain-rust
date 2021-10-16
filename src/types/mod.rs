@@ -1,11 +1,13 @@
 mod account;
 mod block;
 mod blockchain;
+mod chain;
 mod transaction;
 
 pub use account::{Account, AccountType};
 pub use block::Block;
 pub use blockchain::Blockchain;
+pub use chain::Chain;
 pub use transaction::{Transaction, TransactionData};
 
 pub type Hash = String;
