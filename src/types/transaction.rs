@@ -31,6 +31,7 @@ impl Transaction {
     }
 
     pub fn execute<T: WorldState>(&self, state: &mut T, is_genesis: bool) -> Result<(), Error> {
+        //TODO Task 2: Implement signature
         match &self.data {
             TransactionData::CreateAccount(account_id) => {
                 state.create_account(account_id.clone(), AccountType::User)
@@ -47,8 +48,12 @@ impl Transaction {
                     None => Err("Invalid account.".to_string()),
                 }
             }
-
-            _ => Err("Unknown tx".to_string()),
+            // TODO Task 1: Implement transfer transition function
+            // 1. Check that receiver and sender accounts exist
+            // 2. Check sender balance
+            // 3. Change sender/receiver balances and save to state
+            // 4. Test
+            TransactionData::Transfer { to, amount } => Ok(()),
         }
     }
 }

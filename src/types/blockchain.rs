@@ -44,6 +44,8 @@ impl Blockchain {
     }
 
     pub fn append_block(&mut self, block: Block) -> Result<(), Error> {
+        //TODO Task 3: Implement mining
+
         if !block.verify() {
             return Err("Block has invalid hash".to_string());
         }
@@ -62,6 +64,8 @@ impl Blockchain {
             }
         }
 
+        // TODO Task 3: Append block only if block.hash < target
+        // Adjust difficulty of target each block generation (epoch)
         self.blocks.append(block);
         Ok(())
     }
