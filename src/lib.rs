@@ -1,3 +1,2 @@
-mod types;
-
-use std::collections::HashMap;
+pub mod traits;
+pub mod types;
