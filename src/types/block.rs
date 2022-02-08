@@ -57,11 +57,15 @@ impl Hashable for Block {
 mod tests {
     use super::*;
     use crate::types::TransactionData;
+    use crate::utils;
 
     #[test]
     fn test_creation() {
         let mut block = Block::new(None);
-        let tx = Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
+
+        let (account_id, keypair) = utils::generate_account_id();
+
+        let tx = Transaction::new(TransactionData::CreateAccount{account_id, public_key: keypair.public}, None);
         block.set_nonce(1);
         block.add_transaction(tx);
 
@@ -71,7 +75,14 @@ mod tests {
     #[test]
     fn test_hash() {
         let mut block = Block::new(None);
-        let tx = Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
+
+        let (account_alice, keypair_alice) = utils::generate_account_id();
+
+        let tx = Transaction::new(TransactionData::CreateAccount{
+            account_id: account_alice,
+            public_key: keypair_alice.public
+        }, None);
+
         block.set_nonce(1);
 
         let hash1 = block.hash();

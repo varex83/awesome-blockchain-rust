@@ -1,12 +1,10 @@
-use blake2::{Blake2s, Digest};
 use blockchain_workshop::traits::Hashable;
 use blockchain_workshop::types::{Transaction, TransactionData};
 use ed25519_dalek::{Keypair, Signature, Signer, Verifier};
-use std::ops::Add;
 
 fn main() {
     let keypair_bob = Keypair::generate(&mut rand::rngs::OsRng {});
-    let mut tx = Transaction::new(
+    let tx = Transaction::new(
         TransactionData::Transfer {
             to: "alice".to_string(),
             amount: 100,
@@ -19,7 +17,7 @@ fn main() {
 
     // Blockchain
 
-    let mut tx_invalid = Transaction::new(
+    let tx_invalid = Transaction::new(
         TransactionData::Transfer {
             to: "alice".to_string(),
             amount: 1,

@@ -15,11 +15,13 @@ impl WorldState for Blockchain {
         &mut self,
         account_id: AccountId,
         account_type: AccountType,
+        public_key: ed25519_dalek::PublicKey
     ) -> Result<(), Error> {
         match self.accounts.entry(account_id.clone()) {
-            Entry::Occupied(_) => Err(format!("AccountId already exist: {}", account_id)),
+            Entry::Occupied(_) => Err(format!("AccountId already exist")),
             Entry::Vacant(v) => {
-                v.insert(Account::new(account_type));
+                let account = Account::new(account_type, public_key);
+                v.insert(account);
                 Ok(())
             }
         }
@@ -117,6 +119,7 @@ impl Blockchain {
 mod tests {
     use super::*;
     use crate::types::TransactionData;
+    use crate::utils;
     use crate::utils::{append_block, append_block_with_tx};
 
     #[test]
@@ -139,11 +142,20 @@ mod tests {
     fn test_create_genesis_block() {
         let bc = &mut Blockchain::new();
 
+        let (account, keypair) = utils::generate_account_id();
+
         let tx_create_account =
-            Transaction::new(TransactionData::CreateAccount("satoshi".to_string()), None);
+            Transaction::new (
+                TransactionData::CreateAccount{
+                    account_id: account.clone(),
+                    public_key: keypair.public
+                },
+                None
+            );
+
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
-                to: "satoshi".to_string(),
+                to: account.clone(),
                 amount: 100_000_000,
             },
             None,
@@ -152,7 +164,7 @@ mod tests {
             append_block_with_tx(bc, 1, vec![tx_create_account, tx_mint_initial_supply]).is_ok()
         );
 
-        let satoshi = bc.get_account_by_id("satoshi".to_string());
+        let satoshi = bc.get_account_by_id(account);
 
         assert!(satoshi.is_some());
         assert_eq!(satoshi.unwrap().balance, 100_000_000);
@@ -162,15 +174,22 @@ mod tests {
     fn test_create_genesis_block_fails() {
         let mut bc = Blockchain::new();
 
+        let (account, keypair) = utils::generate_account_id();
+
         let tx_create_account =
-            Transaction::new(TransactionData::CreateAccount("satoshi".to_string()), None);
+            Transaction::new(TransactionData::CreateAccount {
+                account_id: account.clone(),
+                public_key: keypair.public
+            }, None);
+
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
-                to: "satoshi".to_string(),
+                to: account.clone(),
                 amount: 100_000_000,
             },
             None,
         );
+
         let mut block = Block::new(None);
         block.set_nonce(1);
         block.add_transaction(tx_mint_initial_supply);
@@ -186,27 +205,46 @@ mod tests {
     fn test_state_rollback_works() {
         let mut bc = Blockchain::new();
 
+        let (account_satoshi, secret) = utils::generate_account_id();
+
         let tx_create_account =
-            Transaction::new(TransactionData::CreateAccount("satoshi".to_string()), None);
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_satoshi.clone(),
+                public_key: secret.public
+            }, None);
+
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
-                to: "satoshi".to_string(),
+                to: account_satoshi.clone(),
                 amount: 100_000_000,
             },
             None,
         );
+
         let mut block = Block::new(None);
+
         block.set_nonce(1);
         block.add_transaction(tx_create_account);
         block.add_transaction(tx_mint_initial_supply);
 
         assert!(bc.append_block(block).is_ok());
 
+        let (account_alice, keypair_alice) = utils::generate_account_id();
+        let (account_bob, keypair_bob) = utils::generate_account_id();
+
+
         let mut block = Block::new(bc.get_last_block_hash());
         let tx_create_alice =
-            Transaction::new(TransactionData::CreateAccount("alice".to_string()), None);
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_alice.clone(),
+                public_key: keypair_alice.public
+            }, None);
         let tx_create_bob =
-            Transaction::new(TransactionData::CreateAccount("bob".to_string()), None);
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_bob.clone(),
+                public_key: keypair_bob.public
+            }, None);
+
         block.set_nonce(2);
         block.add_transaction(tx_create_alice);
         block.add_transaction(tx_create_bob.clone());
@@ -214,20 +252,25 @@ mod tests {
 
         assert!(bc.append_block(block).is_err());
 
-        assert!(bc.get_account_by_id("satoshi".to_string()).is_some());
-        assert!(bc.get_account_by_id("alice".to_string()).is_none());
-        assert!(bc.get_account_by_id("bob".to_string()).is_none());
+        assert!(bc.get_account_by_id(account_satoshi).is_some());
+        assert!(bc.get_account_by_id(account_alice).is_none());
+        assert!(bc.get_account_by_id(account_bob).is_none());
     }
 
     #[test]
     fn test_validate() {
         let bc = &mut Blockchain::new();
 
+        let (account_satoshi, keypair_satoshi) = utils::generate_account_id();
+
         let tx_create_account =
-            Transaction::new(TransactionData::CreateAccount("satoshi".to_string()), None);
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_satoshi.clone(),
+                public_key: keypair_satoshi.public
+            }, None);
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
-                to: "satoshi".to_string(),
+                to: account_satoshi.clone(),
                 amount: 100_000_000,
             },
             None,
@@ -245,11 +288,130 @@ mod tests {
         iter.next();
         iter.next();
         let block = iter.next().unwrap();
+
         block.transactions[1].data = TransactionData::MintInitialSupply {
-            to: "satoshi".to_string(),
+            to: account_satoshi,
             amount: 100,
         };
 
         assert!(bc.validate().is_err());
+    }
+
+    #[test]
+    fn test_transfer() {
+        let bc = &mut Blockchain::new();
+
+        let (account_alice, alice_keypair) = utils::generate_account_id();
+        let (account_bob, bob_keypair) = utils::generate_account_id();
+
+        assert!(utils::create_accounts_and_transfer(
+            bc,
+            account_alice.clone(),
+            account_bob.clone(),
+            account_alice.clone(),
+            account_bob.clone(),
+            100_000_000,
+            100_000,
+            &alice_keypair,
+            &bob_keypair
+        ).is_ok());
+
+        assert_eq!(bc.get_account_by_id(account_alice).unwrap().balance, 99900000);
+        assert_eq!(bc.get_account_by_id(account_bob).unwrap().balance, 100000);
+    }
+
+    #[test]
+    fn test_transfer_fail() {
+        let bc = &mut Blockchain::new();
+
+        let (account_alice, alice_keypair) = utils::generate_account_id();
+        let (account_bob, bob_keypair) = utils::generate_account_id();
+
+        assert!(utils::create_accounts_and_transfer(
+            bc,
+            account_alice.clone(),
+            account_bob.clone(),
+            account_bob.clone(),
+            account_alice.clone(),
+            100_000_000,
+            100_000,
+            &alice_keypair,
+            &bob_keypair
+        ).is_err());
+
+        assert!(utils::create_accounts_and_transfer(
+            bc,
+            account_alice.clone(),
+            account_bob.clone(),
+            account_alice.clone(),
+            account_bob.clone(),
+            100_000_000,
+            100_000_001,
+            &alice_keypair,
+            &bob_keypair
+        ).is_err());
+
+        let (account_bob2, _) = utils::generate_account_id();
+
+        assert!(utils::create_accounts_and_transfer(
+            bc,
+            account_alice.clone(),
+            account_bob.clone(),
+            account_alice.clone(),
+            account_bob2.clone(),
+            100_000_000,
+            100_000,
+            &alice_keypair,
+            &bob_keypair
+        ).is_err());
+
+    }
+
+    #[test]
+    fn test_signature() {
+        let bc = &mut Blockchain::new();
+
+        let (account_1, account_1_keypair) = utils::generate_account_id();
+        let (account_2, account_2_keypair) = utils::generate_account_id();
+
+        let mut transfer_tx =
+            Transaction::new(TransactionData::Transfer {
+                to: account_2.clone(),
+                amount: 100_000
+            }, Some(account_1.clone()));
+
+        assert!(append_block_with_tx(bc, 1, vec![
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_1.clone(),
+                public_key: account_1_keypair.public
+            }, None),
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_2.clone(),
+                public_key: account_2_keypair.public
+            }, None),
+            Transaction::new(TransactionData::MintInitialSupply {
+                to: account_1.clone(),
+                amount: 100_000_000
+            }, None),
+            transfer_tx.clone()
+        ]).is_err());
+
+        transfer_tx.sign(&account_1_keypair);
+
+        assert!(append_block_with_tx(bc, 1, vec![
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_1.clone(),
+                public_key: account_1_keypair.public
+            }, None),
+            Transaction::new(TransactionData::CreateAccount{
+                account_id: account_2.clone(),
+                public_key: account_2_keypair.public
+            }, None),
+            Transaction::new(TransactionData::MintInitialSupply {
+                to: account_1.clone(),
+                amount: 100_000_000
+            }, None),
+            transfer_tx
+        ]).is_ok());
     }
 }
