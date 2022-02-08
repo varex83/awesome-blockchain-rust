@@ -12,7 +12,7 @@ pub fn generate_account_id() -> (AccountId, ed25519_dalek::Keypair) {
 }
 
 
-pub fn append_block(bc: &mut Blockchain, nonce: u128) -> Block {
+pub fn append_block(bc: &mut Blockchain) -> Block {
     let mut block = Block::new(bc.get_last_block_hash());
 
     let (account, keypair) = generate_account_id();
@@ -23,7 +23,6 @@ pub fn append_block(bc: &mut Blockchain, nonce: u128) -> Block {
             public_key: keypair.public
         }, None);
 
-    block.set_nonce(nonce);
     block.add_transaction(tx_create_account);
     let block_clone = block.clone();
 

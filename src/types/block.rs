@@ -1,11 +1,15 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use crate::traits::Hashable;
 use crate::types::{Hash, Transaction};
 use blake2::digest::FixedOutput;
 use blake2::{Blake2s, Digest};
+use num::{BigInt};
 
 #[derive(Default, Debug, Clone)]
 pub struct Block {
     nonce: u128,
+    pub(crate) block_number: u128,
+    pub(crate) timestamp: u128,
     pub(crate) hash: Option<Hash>,
     pub(crate) prev_hash: Option<Hash>,
     pub(crate) transactions: Vec<Transaction>,
@@ -32,8 +36,27 @@ impl Block {
         self.update_hash();
     }
 
-    pub fn verify(&self) -> bool {
-        matches!(&self.hash, Some(hash) if hash == &self.hash())
+    pub fn verify(&self, target: num::BigInt) -> bool {
+        let _hash = BigInt::parse_bytes(self.hash().as_bytes(), 16).unwrap();
+
+        matches!(&self.hash, Some(hash) if true
+                && hash == &self.hash()
+                && _hash < target
+        )
+    }
+
+    pub fn mine(&mut self, target: num::BigInt) {
+        self.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis() as u128;
+        for nonce in 0..u128::MAX { // it'll be OK
+            self.set_nonce(nonce);
+            if BigInt::parse_bytes(self.hash().as_bytes(), 16).unwrap() < target {
+                break;
+            }
+        }
+        self.update_hash();
     }
 
     fn update_hash(&mut self) {
@@ -44,7 +67,7 @@ impl Block {
 impl Hashable for Block {
     fn hash(&self) -> Hash {
         let mut hasher = Blake2s::new();
-        hasher.update(format!("{:?}", (self.prev_hash.clone(), self.nonce)).as_bytes());
+        hasher.update(format!("{:?}", (self.prev_hash.clone(), self.nonce, self.timestamp, self.block_number)).as_bytes());
         for tx in self.transactions.iter() {
             hasher.update(tx.hash())
         }
@@ -92,5 +115,31 @@ mod tests {
         let hash2 = block.hash();
 
         assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_mine() {
+        let mut block = Block::new(None);
+
+        let (account_alice, keypair_alice) = utils::generate_account_id();
+
+        let _tx = Transaction::new(TransactionData::CreateAccount{
+            account_id: account_alice,
+            public_key: keypair_alice.public
+        }, None);
+
+        let target = BigInt::from(5) * BigInt::from(10).pow(73);
+
+        // dbg!(&target);
+        // dbg!(BigInt::parse_bytes(&block.hash().as_bytes(), 16));
+
+        block.add_transaction(_tx);
+
+        block.mine(target.clone());
+
+        assert!(BigInt::parse_bytes(&block.hash().as_bytes(), 16).unwrap()  < target);
+
+        // dbg!(block.nonce);
+
     }
 }

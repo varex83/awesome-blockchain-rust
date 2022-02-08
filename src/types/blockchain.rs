@@ -1,7 +1,12 @@
+use std::cmp::{max, min};
 use crate::traits::{Hashable, WorldState};
 use crate::types::{Account, AccountId, AccountType, Block, Chain, Error, Hash, Transaction};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use num::{BigInt, FromPrimitive};
+
+const MAX_TARGET_CHANGE: i32 = 4; // x0.25 or x4
+const EXPECTED_TIME: i32 = 10; // 10 millisec
 
 #[derive(Default, Debug)]
 pub struct Blockchain {
@@ -38,17 +43,24 @@ impl WorldState for Blockchain {
 
 impl Blockchain {
     pub fn new() -> Self {
-        Default::default()
+        let nbc = Self { ..Default::default() };
+        nbc
     }
 
     pub fn len(&self) -> usize {
         self.blocks.len()
     }
 
-    pub fn append_block(&mut self, block: Block) -> Result<(), Error> {
-        //TODO Task 3: Implement mining
+    pub fn append_block(&mut self, mut block: Block) -> Result<(), Error> {
+        //DONE Task 3: Implement mining
+        block.block_number = match self.blocks.head() {
+            None => 0,
+            Some(x) => x.block_number + 1
+        };
 
-        if !block.verify() {
+        block.mine(self.get_latest_target());
+
+        if !block.verify(self.get_latest_target()) {
             return Err("Block has invalid hash".to_string());
         }
         let is_genesis = self.blocks.len() == 0;
@@ -66,9 +78,14 @@ impl Blockchain {
             }
         }
 
-        // TODO Task 3: Append block only if block.hash < target
+        if !block.verify(self.get_latest_target()) {
+            return Err("Block has invalid hash".to_string());
+        }
+        // DONE Task 3: Append block only if block.hash < target
         // Adjust difficulty of target each block generation (epoch)
+
         self.blocks.append(block);
+
         Ok(())
     }
 
@@ -79,7 +96,7 @@ impl Blockchain {
         for block in self.blocks.iter() {
             let is_genesis = block_num == 1;
 
-            if !block.verify() {
+            if !block.verify(self.get_target(block.block_number)) {
                 return Err(format!("Block {} has invalid hash", block_num));
             }
 
@@ -110,6 +127,44 @@ impl Blockchain {
         Ok(())
     }
 
+    pub fn get_latest_target(&self) -> BigInt {
+        self.get_target(self.blocks.len() as u128)
+    }
+
+    pub fn get_target(&self, block_number: u128) -> BigInt {
+        let initial_target: BigInt = BigInt::from(5) * BigInt::from(10).pow(73);
+
+        let mut target: BigInt = initial_target;
+        let mut prev_timestamp: u128 = 0;
+
+        let mut blocks: Vec<&Block> = vec![];
+        for block in self.blocks.iter() {
+            blocks.push(block);
+        }
+
+        for block in blocks.into_iter().rev() {
+            if block.block_number > 0 {
+                let mut new_target =
+                    target.clone() *
+                        BigInt::from_i64(block.timestamp as i64 - prev_timestamp as i64).unwrap()
+                        / BigInt::from(EXPECTED_TIME);
+
+                    new_target = min(new_target, target.clone() * BigInt::from_i32(MAX_TARGET_CHANGE).unwrap());
+                    new_target = max(new_target, target.clone() / BigInt::from_i32(MAX_TARGET_CHANGE).unwrap());
+
+                    target = new_target;
+            }
+
+            prev_timestamp = block.timestamp;
+
+            if block.block_number == block_number {
+                break;
+            }
+        }
+
+        target
+    }
+
     pub fn get_last_block_hash(&self) -> Option<Hash> {
         self.blocks.head().map(|block| block.hash())
     }
@@ -117,6 +172,7 @@ impl Blockchain {
 
 #[cfg(test)]
 mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
     use super::*;
     use crate::types::TransactionData;
     use crate::utils;
@@ -126,16 +182,6 @@ mod tests {
     fn test_new() {
         let bc = Blockchain::new();
         assert_eq!(bc.get_last_block_hash(), None);
-    }
-
-    #[test]
-    fn test_append() {
-        let bc = &mut Blockchain::new();
-
-        append_block(bc, 1);
-        let block = append_block(bc, 2);
-
-        assert_eq!(bc.get_last_block_hash(), block.hash);
     }
 
     #[test]
@@ -279,8 +325,8 @@ mod tests {
             append_block_with_tx(bc, 1, vec![tx_create_account, tx_mint_initial_supply]).is_ok()
         );
 
-        append_block(bc, 2);
-        append_block(bc, 3);
+        append_block(bc);
+        append_block(bc);
 
         assert!(bc.validate().is_ok());
 
@@ -413,5 +459,18 @@ mod tests {
             }, None),
             transfer_tx
         ]).is_ok());
+    }
+
+    #[test]
+    fn test_target() {
+        let bc = &mut Blockchain::new();
+
+        for _ in 0..12 {
+            append_block(bc);
+        }
+
+        for i in 0..bc.blocks.len() {
+            dbg!((i, bc.get_target(i as u128)));
+        }
     }
 }

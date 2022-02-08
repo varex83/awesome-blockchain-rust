@@ -64,7 +64,7 @@ impl Transaction {
     }
 
     pub fn execute<T: WorldState>(&self, state: &mut T, is_genesis: bool) -> Result<(), Error> {
-        //TODO Task 2: Implement signature
+        //DONE Task 2: Implement signature
         match &self.data {
             TransactionData::CreateAccount {account_id, public_key}  => {
                 state.create_account(
