@@ -1,9 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
 use crate::traits::Hashable;
 use crate::types::{Hash, Transaction};
 use blake2::digest::FixedOutput;
 use blake2::{Blake2s, Digest};
-use num::{BigInt};
+use num::BigInt;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Default, Debug, Clone)]
 pub struct Block {
@@ -46,17 +46,18 @@ impl Block {
     }
 
     pub fn mine(&mut self, target: num::BigInt) {
-        self.timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_millis() as u128;
-        for nonce in 0..u128::MAX { // it'll be OK
+        for nonce in 0..u128::MAX {
+            // it'll be OK
             self.set_nonce(nonce);
             if BigInt::parse_bytes(self.hash().as_bytes(), 16).unwrap() < target {
                 break;
             }
         }
         self.update_hash();
+        self.timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis() as u128;
     }
 
     fn update_hash(&mut self) {
@@ -67,7 +68,17 @@ impl Block {
 impl Hashable for Block {
     fn hash(&self) -> Hash {
         let mut hasher = Blake2s::new();
-        hasher.update(format!("{:?}", (self.prev_hash.clone(), self.nonce, self.timestamp, self.block_number)).as_bytes());
+        hasher.update(
+            format!(
+                "{:?}",
+                (
+                    self.prev_hash.clone(),
+                    self.nonce,
+                    self.block_number
+                )
+            )
+            .as_bytes(),
+        );
         for tx in self.transactions.iter() {
             hasher.update(tx.hash())
         }
@@ -88,7 +99,13 @@ mod tests {
 
         let (account_id, keypair) = utils::generate_account_id();
 
-        let tx = Transaction::new(TransactionData::CreateAccount{account_id, public_key: keypair.public}, None);
+        let tx = Transaction::new(
+            TransactionData::CreateAccount {
+                account_id,
+                public_key: keypair.public,
+            },
+            None,
+        );
         block.set_nonce(1);
         block.add_transaction(tx);
 
@@ -101,10 +118,13 @@ mod tests {
 
         let (account_alice, keypair_alice) = utils::generate_account_id();
 
-        let tx = Transaction::new(TransactionData::CreateAccount{
-            account_id: account_alice,
-            public_key: keypair_alice.public
-        }, None);
+        let tx = Transaction::new(
+            TransactionData::CreateAccount {
+                account_id: account_alice,
+                public_key: keypair_alice.public,
+            },
+            None,
+        );
 
         block.set_nonce(1);
 
@@ -123,10 +143,13 @@ mod tests {
 
         let (account_alice, keypair_alice) = utils::generate_account_id();
 
-        let _tx = Transaction::new(TransactionData::CreateAccount{
-            account_id: account_alice,
-            public_key: keypair_alice.public
-        }, None);
+        let _tx = Transaction::new(
+            TransactionData::CreateAccount {
+                account_id: account_alice,
+                public_key: keypair_alice.public,
+            },
+            None,
+        );
 
         let target = BigInt::from(5) * BigInt::from(10).pow(73);
 
@@ -137,9 +160,8 @@ mod tests {
 
         block.mine(target.clone());
 
-        assert!(BigInt::parse_bytes(&block.hash().as_bytes(), 16).unwrap()  < target);
+        assert!(BigInt::parse_bytes(&block.hash().as_bytes(), 16).unwrap() < target);
 
         // dbg!(block.nonce);
-
     }
 }

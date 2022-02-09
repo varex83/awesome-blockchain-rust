@@ -1,12 +1,12 @@
-use std::cmp::{max, min};
 use crate::traits::{Hashable, WorldState};
 use crate::types::{Account, AccountId, AccountType, Block, Chain, Error, Hash, Transaction};
+use num::{BigInt, FromPrimitive};
+use std::cmp::{max, min};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use num::{BigInt, FromPrimitive};
 
 const MAX_TARGET_CHANGE: i32 = 4; // x0.25 or x4
-const EXPECTED_TIME: i32 = 10; // 10 millisec
+const EXPECTED_TIME: i32 = 1000; // 10 millisec
 
 #[derive(Default, Debug)]
 pub struct Blockchain {
@@ -20,7 +20,7 @@ impl WorldState for Blockchain {
         &mut self,
         account_id: AccountId,
         account_type: AccountType,
-        public_key: ed25519_dalek::PublicKey
+        public_key: ed25519_dalek::PublicKey,
     ) -> Result<(), Error> {
         match self.accounts.entry(account_id.clone()) {
             Entry::Occupied(_) => Err(format!("AccountId already exist")),
@@ -43,7 +43,9 @@ impl WorldState for Blockchain {
 
 impl Blockchain {
     pub fn new() -> Self {
-        let nbc = Self { ..Default::default() };
+        let nbc = Self {
+            ..Default::default()
+        };
         nbc
     }
 
@@ -55,7 +57,7 @@ impl Blockchain {
         //DONE Task 3: Implement mining
         block.block_number = match self.blocks.head() {
             None => 0,
-            Some(x) => x.block_number + 1
+            Some(x) => x.block_number + 1,
         };
 
         block.mine(self.get_latest_target());
@@ -144,15 +146,20 @@ impl Blockchain {
 
         for block in blocks.into_iter().rev() {
             if block.block_number > 0 {
-                let mut new_target =
-                    target.clone() *
-                        BigInt::from_i64(block.timestamp as i64 - prev_timestamp as i64).unwrap()
-                        / BigInt::from(EXPECTED_TIME);
+                let mut new_target = target.clone()
+                    * BigInt::from_i64(block.timestamp as i64 - prev_timestamp as i64).unwrap()
+                    / BigInt::from(EXPECTED_TIME);
 
-                    new_target = min(new_target, target.clone() * BigInt::from_i32(MAX_TARGET_CHANGE).unwrap());
-                    new_target = max(new_target, target.clone() / BigInt::from_i32(MAX_TARGET_CHANGE).unwrap());
+                new_target = min(
+                    new_target,
+                    target.clone() * BigInt::from_i32(MAX_TARGET_CHANGE).unwrap(),
+                );
+                new_target = max(
+                    new_target,
+                    target.clone() / BigInt::from_i32(MAX_TARGET_CHANGE).unwrap(),
+                );
 
-                    target = new_target;
+                target = new_target;
             }
 
             prev_timestamp = block.timestamp;
@@ -172,11 +179,11 @@ impl Blockchain {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{SystemTime, UNIX_EPOCH};
     use super::*;
     use crate::types::TransactionData;
     use crate::utils;
     use crate::utils::{append_block, append_block_with_tx};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn test_new() {
@@ -190,14 +197,13 @@ mod tests {
 
         let (account, keypair) = utils::generate_account_id();
 
-        let tx_create_account =
-            Transaction::new (
-                TransactionData::CreateAccount{
-                    account_id: account.clone(),
-                    public_key: keypair.public
-                },
-                None
-            );
+        let tx_create_account = Transaction::new(
+            TransactionData::CreateAccount {
+                account_id: account.clone(),
+                public_key: keypair.public,
+            },
+            None,
+        );
 
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
@@ -222,11 +228,13 @@ mod tests {
 
         let (account, keypair) = utils::generate_account_id();
 
-        let tx_create_account =
-            Transaction::new(TransactionData::CreateAccount {
+        let tx_create_account = Transaction::new(
+            TransactionData::CreateAccount {
                 account_id: account.clone(),
-                public_key: keypair.public
-            }, None);
+                public_key: keypair.public,
+            },
+            None,
+        );
 
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
@@ -253,11 +261,13 @@ mod tests {
 
         let (account_satoshi, secret) = utils::generate_account_id();
 
-        let tx_create_account =
-            Transaction::new(TransactionData::CreateAccount{
+        let tx_create_account = Transaction::new(
+            TransactionData::CreateAccount {
                 account_id: account_satoshi.clone(),
-                public_key: secret.public
-            }, None);
+                public_key: secret.public,
+            },
+            None,
+        );
 
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
@@ -278,18 +288,21 @@ mod tests {
         let (account_alice, keypair_alice) = utils::generate_account_id();
         let (account_bob, keypair_bob) = utils::generate_account_id();
 
-
         let mut block = Block::new(bc.get_last_block_hash());
-        let tx_create_alice =
-            Transaction::new(TransactionData::CreateAccount{
+        let tx_create_alice = Transaction::new(
+            TransactionData::CreateAccount {
                 account_id: account_alice.clone(),
-                public_key: keypair_alice.public
-            }, None);
-        let tx_create_bob =
-            Transaction::new(TransactionData::CreateAccount{
+                public_key: keypair_alice.public,
+            },
+            None,
+        );
+        let tx_create_bob = Transaction::new(
+            TransactionData::CreateAccount {
                 account_id: account_bob.clone(),
-                public_key: keypair_bob.public
-            }, None);
+                public_key: keypair_bob.public,
+            },
+            None,
+        );
 
         block.set_nonce(2);
         block.add_transaction(tx_create_alice);
@@ -309,11 +322,13 @@ mod tests {
 
         let (account_satoshi, keypair_satoshi) = utils::generate_account_id();
 
-        let tx_create_account =
-            Transaction::new(TransactionData::CreateAccount{
+        let tx_create_account = Transaction::new(
+            TransactionData::CreateAccount {
                 account_id: account_satoshi.clone(),
-                public_key: keypair_satoshi.public
-            }, None);
+                public_key: keypair_satoshi.public,
+            },
+            None,
+        );
         let tx_mint_initial_supply = Transaction::new(
             TransactionData::MintInitialSupply {
                 to: account_satoshi.clone(),
@@ -360,9 +375,13 @@ mod tests {
             100_000,
             &alice_keypair,
             &bob_keypair
-        ).is_ok());
+        )
+        .is_ok());
 
-        assert_eq!(bc.get_account_by_id(account_alice).unwrap().balance, 99900000);
+        assert_eq!(
+            bc.get_account_by_id(account_alice).unwrap().balance,
+            99900000
+        );
         assert_eq!(bc.get_account_by_id(account_bob).unwrap().balance, 100000);
     }
 
@@ -383,7 +402,8 @@ mod tests {
             100_000,
             &alice_keypair,
             &bob_keypair
-        ).is_err());
+        )
+        .is_err());
 
         assert!(utils::create_accounts_and_transfer(
             bc,
@@ -395,7 +415,8 @@ mod tests {
             100_000_001,
             &alice_keypair,
             &bob_keypair
-        ).is_err());
+        )
+        .is_err());
 
         let (account_bob2, _) = utils::generate_account_id();
 
@@ -409,8 +430,8 @@ mod tests {
             100_000,
             &alice_keypair,
             &bob_keypair
-        ).is_err());
-
+        )
+        .is_err());
     }
 
     #[test]
@@ -420,45 +441,75 @@ mod tests {
         let (account_1, account_1_keypair) = utils::generate_account_id();
         let (account_2, account_2_keypair) = utils::generate_account_id();
 
-        let mut transfer_tx =
-            Transaction::new(TransactionData::Transfer {
+        let mut transfer_tx = Transaction::new(
+            TransactionData::Transfer {
                 to: account_2.clone(),
-                amount: 100_000
-            }, Some(account_1.clone()));
+                amount: 100_000,
+            },
+            Some(account_1.clone()),
+        );
 
-        assert!(append_block_with_tx(bc, 1, vec![
-            Transaction::new(TransactionData::CreateAccount{
-                account_id: account_1.clone(),
-                public_key: account_1_keypair.public
-            }, None),
-            Transaction::new(TransactionData::CreateAccount{
-                account_id: account_2.clone(),
-                public_key: account_2_keypair.public
-            }, None),
-            Transaction::new(TransactionData::MintInitialSupply {
-                to: account_1.clone(),
-                amount: 100_000_000
-            }, None),
-            transfer_tx.clone()
-        ]).is_err());
+        assert!(append_block_with_tx(
+            bc,
+            1,
+            vec![
+                Transaction::new(
+                    TransactionData::CreateAccount {
+                        account_id: account_1.clone(),
+                        public_key: account_1_keypair.public
+                    },
+                    None
+                ),
+                Transaction::new(
+                    TransactionData::CreateAccount {
+                        account_id: account_2.clone(),
+                        public_key: account_2_keypair.public
+                    },
+                    None
+                ),
+                Transaction::new(
+                    TransactionData::MintInitialSupply {
+                        to: account_1.clone(),
+                        amount: 100_000_000
+                    },
+                    None
+                ),
+                transfer_tx.clone()
+            ]
+        )
+        .is_err());
 
         transfer_tx.sign(&account_1_keypair);
 
-        assert!(append_block_with_tx(bc, 1, vec![
-            Transaction::new(TransactionData::CreateAccount{
-                account_id: account_1.clone(),
-                public_key: account_1_keypair.public
-            }, None),
-            Transaction::new(TransactionData::CreateAccount{
-                account_id: account_2.clone(),
-                public_key: account_2_keypair.public
-            }, None),
-            Transaction::new(TransactionData::MintInitialSupply {
-                to: account_1.clone(),
-                amount: 100_000_000
-            }, None),
-            transfer_tx
-        ]).is_ok());
+        assert!(append_block_with_tx(
+            bc,
+            1,
+            vec![
+                Transaction::new(
+                    TransactionData::CreateAccount {
+                        account_id: account_1.clone(),
+                        public_key: account_1_keypair.public
+                    },
+                    None
+                ),
+                Transaction::new(
+                    TransactionData::CreateAccount {
+                        account_id: account_2.clone(),
+                        public_key: account_2_keypair.public
+                    },
+                    None
+                ),
+                Transaction::new(
+                    TransactionData::MintInitialSupply {
+                        to: account_1.clone(),
+                        amount: 100_000_000
+                    },
+                    None
+                ),
+                transfer_tx
+            ]
+        )
+        .is_ok());
     }
 
     #[test]
@@ -467,6 +518,13 @@ mod tests {
 
         for _ in 0..12 {
             append_block(bc);
+        }
+
+        let mut prev_time = bc.blocks.head().unwrap().timestamp;
+
+        for block in bc.blocks.iter() {
+            dbg!(&prev_time - &block.timestamp);
+            prev_time = block.timestamp;
         }
 
         for i in 0..bc.blocks.len() {

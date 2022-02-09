@@ -10,7 +10,7 @@ pub enum AccountType {
 pub struct Account {
     account_type: AccountType,
     pub(crate) balance: Balance,
-    pub(crate) public_key: ed25519_dalek::PublicKey
+    pub(crate) public_key: ed25519_dalek::PublicKey,
 }
 
 impl Account {
@@ -18,7 +18,7 @@ impl Account {
         Self {
             account_type,
             balance: 0,
-            public_key
+            public_key,
         }
     }
 }

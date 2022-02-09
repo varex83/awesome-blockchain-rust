@@ -5,23 +5,21 @@ pub fn generate_account_id() -> (AccountId, ed25519_dalek::Keypair) {
     let keypair = ed25519_dalek::Keypair::generate(&mut rand::rngs::OsRng {});
     let public = keypair.public;
     let account_id = hex::encode(Blake2s::digest(public.as_ref()));
-    (
-        account_id,
-        keypair
-    )
+    (account_id, keypair)
 }
-
 
 pub fn append_block(bc: &mut Blockchain) -> Block {
     let mut block = Block::new(bc.get_last_block_hash());
 
     let (account, keypair) = generate_account_id();
 
-    let tx_create_account =
-        Transaction::new(TransactionData::CreateAccount{
+    let tx_create_account = Transaction::new(
+        TransactionData::CreateAccount {
             account_id: account,
-            public_key: keypair.public
-        }, None);
+            public_key: keypair.public,
+        },
+        None,
+    );
 
     block.add_transaction(tx_create_account);
     let block_clone = block.clone();
@@ -55,13 +53,15 @@ pub fn create_accounts_and_transfer(
     amount_to_mint: Balance,
     amount_to_send: Balance,
     account_1_keypair: &ed25519_dalek::Keypair,
-    account_2_keypair: &ed25519_dalek::Keypair
+    account_2_keypair: &ed25519_dalek::Keypair,
 ) -> Result<(), Error> {
-    let mut transfer_tx =
-        Transaction::new(TransactionData::Transfer {
+    let mut transfer_tx = Transaction::new(
+        TransactionData::Transfer {
             to,
-            amount: amount_to_send
-        }, Some(from));
+            amount: amount_to_send,
+        },
+        Some(from),
+    );
 
     transfer_tx.sign(account_1_keypair);
 
@@ -69,20 +69,29 @@ pub fn create_accounts_and_transfer(
         bc,
         1,
         vec![
-            Transaction::new(TransactionData::CreateAccount{
-                account_id: account_1.clone(),
-                public_key: account_1_keypair.public
-            }, None),
-            Transaction::new(TransactionData::CreateAccount{
-                account_id: account_2.clone(),
-                public_key: account_2_keypair.public
-            }, None),
-            Transaction::new(TransactionData::MintInitialSupply {
-                to: account_1.clone(),
-                amount: amount_to_mint
-            }, None),
-            transfer_tx
-        ]
+            Transaction::new(
+                TransactionData::CreateAccount {
+                    account_id: account_1.clone(),
+                    public_key: account_1_keypair.public,
+                },
+                None,
+            ),
+            Transaction::new(
+                TransactionData::CreateAccount {
+                    account_id: account_2.clone(),
+                    public_key: account_2_keypair.public,
+                },
+                None,
+            ),
+            Transaction::new(
+                TransactionData::MintInitialSupply {
+                    to: account_1.clone(),
+                    amount: amount_to_mint,
+                },
+                None,
+            ),
+            transfer_tx,
+        ],
     )
 }
 

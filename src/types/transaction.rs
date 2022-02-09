@@ -15,9 +15,18 @@ pub struct Transaction {
 
 #[derive(Debug, Clone)]
 pub enum TransactionData {
-    CreateAccount{ account_id: AccountId, public_key: ed25519_dalek::PublicKey },
-    MintInitialSupply { to: AccountId, amount: Balance },
-    Transfer { to: AccountId, amount: Balance },
+    CreateAccount {
+        account_id: AccountId,
+        public_key: ed25519_dalek::PublicKey,
+    },
+    MintInitialSupply {
+        to: AccountId,
+        amount: Balance,
+    },
+    Transfer {
+        to: AccountId,
+        amount: Balance,
+    },
 }
 
 impl Transaction {
@@ -50,12 +59,12 @@ impl Transaction {
 
         let account = account.unwrap();
 
-        match account.public_key.verify(
-            self.hash().as_bytes(),
-            &self.signature.unwrap()
-        ) {
+        match account
+            .public_key
+            .verify(self.hash().as_bytes(), &self.signature.unwrap())
+        {
             Ok(()) => Ok(()),
-            Err(_) => Err("Error: error occurred while verifying signature".to_string())
+            Err(_) => Err("Error: error occurred while verifying signature".to_string()),
         }
     }
 
@@ -66,13 +75,10 @@ impl Transaction {
     pub fn execute<T: WorldState>(&self, state: &mut T, is_genesis: bool) -> Result<(), Error> {
         //DONE Task 2: Implement signature
         match &self.data {
-            TransactionData::CreateAccount {account_id, public_key}  => {
-                state.create_account(
-                    account_id.clone(),
-                    AccountType::User,
-                    *public_key
-                )
-            }
+            TransactionData::CreateAccount {
+                account_id,
+                public_key,
+            } => state.create_account(account_id.clone(), AccountType::User, *public_key),
             TransactionData::MintInitialSupply { to, amount } => {
                 if !is_genesis {
                     return Err("Initial supply can be minted only in genesis block.".to_string());
@@ -94,16 +100,16 @@ impl Transaction {
                 let from = self.from.clone();
 
                 if !from.is_some() {
-                    return Err("You can't make transfer from non-existing account".to_string())
+                    return Err("You can't make transfer from non-existing account".to_string());
                 }
 
                 let from = from.unwrap();
 
                 if !state.get_account_by_id_mut(from.clone()).is_some() {
-                    return Err("You can't make transfer from non-existing account".to_string())
+                    return Err("You can't make transfer from non-existing account".to_string());
                 }
                 if !state.get_account_by_id_mut(to.clone()).is_some() {
-                    return Err("You can't make transfer to non-existing account".to_string())
+                    return Err("You can't make transfer to non-existing account".to_string());
                 };
 
                 if let Err(e) = self.verify_signature(state) {
@@ -113,17 +119,17 @@ impl Transaction {
                 let from = state.get_account_by_id_mut(from.clone()).unwrap();
 
                 if &from.balance < amount {
-                    return Err("You can't transfer more tokens than you have".to_string())
+                    return Err("You can't transfer more tokens than you have".to_string());
                 }
 
                 from.balance -= amount;
 
                 let to = state.get_account_by_id_mut(to.clone()).unwrap();
 
-                to.balance   += amount;
+                to.balance += amount;
 
                 Ok(())
-            },
+            }
         }
     }
 }
