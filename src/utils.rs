@@ -1,5 +1,8 @@
-use crate::types::{AccountId, Balance, Block, Blockchain, Error, Transaction, TransactionData};
+use crate::types::{
+    miner, AccountId, Balance, Block, Blockchain, Error, Transaction, TransactionData,
+};
 use blake2::{Blake2s, Digest};
+use num::BigInt;
 
 pub fn generate_account_id() -> (AccountId, ed25519_dalek::Keypair) {
     let keypair = ed25519_dalek::Keypair::generate(&mut rand::rngs::OsRng {});
@@ -9,7 +12,7 @@ pub fn generate_account_id() -> (AccountId, ed25519_dalek::Keypair) {
 }
 
 pub fn append_block(bc: &mut Blockchain) -> Block {
-    let mut block = Block::new(bc.get_last_block_hash());
+    let mut block = Block::new(bc.get_last_block_hash(), bc.get_last_block_number());
 
     let (account, keypair) = generate_account_id();
 
@@ -22,6 +25,9 @@ pub fn append_block(bc: &mut Blockchain) -> Block {
     );
 
     block.add_transaction(tx_create_account);
+
+    miner::mine(&mut block, bc.get_latest_target());
+
     let block_clone = block.clone();
 
     assert!(bc.append_block(block).is_ok());
@@ -34,14 +40,31 @@ pub fn append_block_with_tx(
     nonce: u128,
     transactions: Vec<Transaction>,
 ) -> Result<(), Error> {
-    let mut block = Block::new(bc.get_last_block_hash());
+    let mut block = Block::new(bc.get_last_block_hash(), bc.get_last_block_number());
     block.set_nonce(nonce);
 
     for tx in transactions {
         block.add_transaction(tx);
     }
 
+    miner::mine(&mut block, bc.get_latest_target());
+
     bc.append_block(block)
+}
+
+pub fn to_compact_format(target: BigInt) -> String {
+    let mut hex_target = format!("{:03x}", target);
+
+    let mut len = hex_target.len();
+
+    if len % 2 != 0 {
+        hex_target = "0".to_string() + &*hex_target;
+        len += 1;
+    }
+
+    hex_target = hex_target[0..6].parse().unwrap();
+    let target_compacted = format!("0x{:x}{}", len / 2, hex_target);
+    return target_compacted;
 }
 
 pub fn create_accounts_and_transfer(
@@ -98,9 +121,17 @@ pub fn create_accounts_and_transfer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn test_generate() {
         dbg!(generate_account_id());
+    }
+
+    #[test]
+    fn test_target_compacted() {
+        dbg!(to_compact_format(
+            BigInt::from_str("161578008857017275969393492955354620126364423170461532160").unwrap()
+        ));
     }
 }

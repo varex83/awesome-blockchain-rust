@@ -9,7 +9,7 @@ pub enum AccountType {
 #[derive(Debug, Clone)]
 pub struct Account {
     account_type: AccountType,
-    pub(crate) balance: Balance,
+    pub balance: Balance,
     pub(crate) public_key: ed25519_dalek::PublicKey,
 }
 

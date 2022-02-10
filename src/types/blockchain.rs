@@ -5,12 +5,13 @@ use std::cmp::{max, min};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-const MAX_TARGET_CHANGE: i32 = 4; // x0.25 or x4
-const EXPECTED_TIME: i32 = 1000; // 10 millisec
+const MAX_TARGET_CHANGE: i32 = 10; // x0.10 or x10
+const EXPECTED_TIME: i32 = 1000 * 60 * 1; // 1 min
+const X: u128 = 2; // Target will generate after X blocks
 
 #[derive(Default, Debug)]
 pub struct Blockchain {
-    blocks: Chain<Block>,
+    pub blocks: Chain<Block>,
     accounts: HashMap<AccountId, Account>,
     transaction_pool: Vec<Transaction>,
 }
@@ -53,15 +54,7 @@ impl Blockchain {
         self.blocks.len()
     }
 
-    pub fn append_block(&mut self, mut block: Block) -> Result<(), Error> {
-        //DONE Task 3: Implement mining
-        block.block_number = match self.blocks.head() {
-            None => 0,
-            Some(x) => x.block_number + 1,
-        };
-
-        block.mine(self.get_latest_target());
-
+    pub fn append_block(&mut self, block: Block) -> Result<(), Error> {
         if !block.verify(self.get_latest_target()) {
             return Err("Block has invalid hash".to_string());
         }
@@ -96,10 +89,10 @@ impl Blockchain {
         let mut prev_block_hash: Option<Hash> = None;
 
         for block in self.blocks.iter() {
-            let is_genesis = block_num == 1;
+            let is_genesis = block.block_number == 0;
 
             if !block.verify(self.get_target(block.block_number)) {
-                return Err(format!("Block {} has invalid hash", block_num));
+                return Err(format!("Block {} has invalid hash", block.block_number));
             }
 
             if !is_genesis && block.prev_hash.is_none() {
@@ -134,21 +127,34 @@ impl Blockchain {
     }
 
     pub fn get_target(&self, block_number: u128) -> BigInt {
-        let initial_target: BigInt = BigInt::from(5) * BigInt::from(10).pow(73);
+        let initial_target: BigInt = BigInt::from(5) * BigInt::from(10).pow(74);
+
+        if self.blocks.len() == 0 {
+            return initial_target;
+        }
 
         let mut target: BigInt = initial_target;
-        let mut prev_timestamp: u128 = 0;
 
         let mut blocks: Vec<&Block> = vec![];
         for block in self.blocks.iter() {
             blocks.push(block);
         }
 
+        let mut prev_timestamp: u128 = blocks[0].timestamp;
+        let mut last_block_generated = 0;
+
         for block in blocks.into_iter().rev() {
-            if block.block_number > 0 {
-                let mut new_target = target.clone()
-                    * BigInt::from_i64(block.timestamp as i64 - prev_timestamp as i64).unwrap()
-                    / BigInt::from(EXPECTED_TIME);
+            if block.block_number == block_number {
+                break;
+            }
+
+            if block.block_number > 0 && block.block_number - last_block_generated >= X {
+                last_block_generated = block.block_number;
+
+                let average_time =
+                    BigInt::from_i64(block.timestamp as i64 - prev_timestamp as i64).unwrap() / X;
+
+                let mut new_target = target.clone() * average_time / BigInt::from(EXPECTED_TIME);
 
                 new_target = min(
                     new_target,
@@ -160,12 +166,7 @@ impl Blockchain {
                 );
 
                 target = new_target;
-            }
-
-            prev_timestamp = block.timestamp;
-
-            if block.block_number == block_number {
-                break;
+                prev_timestamp = block.timestamp;
             }
         }
 
@@ -175,15 +176,21 @@ impl Blockchain {
     pub fn get_last_block_hash(&self) -> Option<Hash> {
         self.blocks.head().map(|block| block.hash())
     }
+
+    pub fn get_last_block_number(&self) -> Option<u128> {
+        match self.blocks.head() {
+            None => None,
+            Some(x) => Some(x.block_number),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::TransactionData;
+    use crate::types::{miner, TransactionData};
     use crate::utils;
     use crate::utils::{append_block, append_block_with_tx};
-    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn test_new() {
@@ -244,10 +251,12 @@ mod tests {
             None,
         );
 
-        let mut block = Block::new(None);
-        block.set_nonce(1);
+        let mut block = Block::new(None, None);
+
         block.add_transaction(tx_mint_initial_supply);
         block.add_transaction(tx_create_account);
+
+        miner::mine(&mut block, bc.get_latest_target());
 
         assert_eq!(
             bc.append_block(block).err().unwrap(),
@@ -277,18 +286,19 @@ mod tests {
             None,
         );
 
-        let mut block = Block::new(None);
+        let mut block = Block::new(None, None);
 
-        block.set_nonce(1);
         block.add_transaction(tx_create_account);
         block.add_transaction(tx_mint_initial_supply);
+
+        miner::mine(&mut block, bc.get_latest_target());
 
         assert!(bc.append_block(block).is_ok());
 
         let (account_alice, keypair_alice) = utils::generate_account_id();
         let (account_bob, keypair_bob) = utils::generate_account_id();
 
-        let mut block = Block::new(bc.get_last_block_hash());
+        let mut block = Block::new(bc.get_last_block_hash(), bc.get_last_block_number());
         let tx_create_alice = Transaction::new(
             TransactionData::CreateAccount {
                 account_id: account_alice.clone(),
@@ -304,10 +314,11 @@ mod tests {
             None,
         );
 
-        block.set_nonce(2);
         block.add_transaction(tx_create_alice);
         block.add_transaction(tx_create_bob.clone());
         block.add_transaction(tx_create_bob);
+
+        miner::mine(&mut block, bc.get_latest_target());
 
         assert!(bc.append_block(block).is_err());
 

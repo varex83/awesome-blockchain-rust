@@ -3,24 +3,28 @@ use crate::types::{Hash, Transaction};
 use blake2::digest::FixedOutput;
 use blake2::{Blake2s, Digest};
 use num::BigInt;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Default, Debug, Clone)]
 pub struct Block {
-    nonce: u128,
-    pub(crate) block_number: u128,
-    pub(crate) timestamp: u128,
+    pub nonce: u128,
+    pub block_number: u128,
+    pub timestamp: u128,
     pub(crate) hash: Option<Hash>,
     pub(crate) prev_hash: Option<Hash>,
     pub(crate) transactions: Vec<Transaction>,
 }
 
 impl Block {
-    pub fn new(prev_hash: Option<Hash>) -> Self {
+    pub fn new(prev_hash: Option<Hash>, prev_block_number: Option<u128>) -> Self {
         let mut block = Block {
             prev_hash,
+            block_number: match prev_block_number {
+                None => 0,
+                Some(num) => num + 1,
+            },
             ..Default::default()
         };
+
         block.update_hash();
 
         block
@@ -45,22 +49,7 @@ impl Block {
         )
     }
 
-    pub fn mine(&mut self, target: num::BigInt) {
-        for nonce in 0..u128::MAX {
-            // it'll be OK
-            self.set_nonce(nonce);
-            if BigInt::parse_bytes(self.hash().as_bytes(), 16).unwrap() < target {
-                break;
-            }
-        }
-        self.update_hash();
-        self.timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_millis() as u128;
-    }
-
-    fn update_hash(&mut self) {
+    pub(crate) fn update_hash(&mut self) {
         self.hash = Some(self.hash());
     }
 }
@@ -71,11 +60,7 @@ impl Hashable for Block {
         hasher.update(
             format!(
                 "{:?}",
-                (
-                    self.prev_hash.clone(),
-                    self.nonce,
-                    self.block_number
-                )
+                (self.prev_hash.clone(), self.nonce, self.block_number)
             )
             .as_bytes(),
         );
@@ -90,12 +75,12 @@ impl Hashable for Block {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::TransactionData;
+    use crate::types::{miner, TransactionData};
     use crate::utils;
 
     #[test]
     fn test_creation() {
-        let mut block = Block::new(None);
+        let mut block = Block::new(None, None);
 
         let (account_id, keypair) = utils::generate_account_id();
 
@@ -114,7 +99,7 @@ mod tests {
 
     #[test]
     fn test_hash() {
-        let mut block = Block::new(None);
+        let mut block = Block::new(None, None);
 
         let (account_alice, keypair_alice) = utils::generate_account_id();
 
@@ -139,7 +124,7 @@ mod tests {
 
     #[test]
     fn test_mine() {
-        let mut block = Block::new(None);
+        let mut block = Block::new(None, None);
 
         let (account_alice, keypair_alice) = utils::generate_account_id();
 
@@ -158,7 +143,7 @@ mod tests {
 
         block.add_transaction(_tx);
 
-        block.mine(target.clone());
+        miner::mine(&mut block, target.clone());
 
         assert!(BigInt::parse_bytes(&block.hash().as_bytes(), 16).unwrap() < target);
 
